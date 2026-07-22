@@ -10,6 +10,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@main
+      - uses: tailscale/github-action@main
+        with:
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          audience: ${{ secrets.TS_AUDIENCE }}
+          tags: tag:ci
+          args: --advertise-exit-node
       - uses: wimpysworld/nothing-but-nix@main
       - uses: cachix/install-nix-action@master
         with:
