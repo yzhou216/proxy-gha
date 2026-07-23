@@ -21,6 +21,8 @@ jobs:
         with:
           extra_nix_config: |
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
+      - name: Fix Nix stack size
+        run: sudo prlimit --pid $$ --stack=62914560:62914560
       - run: nix develop --command bash setup.sh
         env:
           CLOUDFLARED_TOKEN: ${{ secrets.CLOUDFLARED_TOKEN }}
