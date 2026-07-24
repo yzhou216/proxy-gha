@@ -23,13 +23,10 @@ jobs:
             access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
       - name: Fix Nix stack size
         run: sudo prlimit --pid $$ --stack=62914560:62914560
-      - name: Install nix-index with prebuilt database
+      - name: Enable nix-index command-not-found for SSH sessions
         run: |
-          nix profile add nixpkgs#nix-index
-          mkdir --parents ~/.cache/nix-index
-          curl --output ~/.cache/nix-index/files --location \
-            https://github.com/nix-community/nix-index-database/releases/latest/download/index-x86_64-linux
-          source "$(nix eval --raw nixpkgs#nix-index)/etc/profile.d/command-not-found.sh"
+          NIX_INDEX_DB=$(nix build --no-link --print-out-paths github:nix-community/nix-index-database#nix-index-with-db)
+          echo "source ${NIX_INDEX_DB}/etc/profile.d/command-not-found.sh" >> ~/.bashenv
       - run: nix develop --command bash setup.sh
         env:
           CLOUDFLARED_TOKEN: ${{ secrets.CLOUDFLARED_TOKEN }}
