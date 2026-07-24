@@ -13,4 +13,4 @@ sudo "$(command -v sshd)"
 
 cloudflared tunnel run --token "$CLOUDFLARED_TOKEN" &
 
-sleep 5h 59m
+sleep 5h 58m
