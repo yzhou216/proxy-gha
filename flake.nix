@@ -26,7 +26,9 @@
       {
         packages.default = pkgs.cloudflared;
         devShells.default = pkgs.mkShell {
+          env.DOCKER_HOST = "unix:///run/podman/podman.sock";
           packages = with pkgs; [
+            act
             cloudflared
             openssh
             nix-index-db
