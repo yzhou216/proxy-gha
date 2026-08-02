@@ -11,6 +11,4 @@ sudo mkdir -p /var/empty
 sudo "$(command -v ssh-keygen)" -A
 sudo "$(command -v sshd)"
 
-cloudflared tunnel run --token "$CLOUDFLARED_TOKEN" &
-
 sleep 5h 58m

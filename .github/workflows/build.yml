@@ -28,5 +28,3 @@ jobs:
           NIX_INDEX_DB=$(nix build --no-link --print-out-paths github:nix-community/nix-index-database#nix-index-with-db)
           echo "source ${NIX_INDEX_DB}/etc/profile.d/command-not-found.sh" >> ~/.bashenv
       - run: nix develop --command bash setup.sh
-        env:
-          CLOUDFLARED_TOKEN: ${{ secrets.CLOUDFLARED_TOKEN }}
