@@ -16,7 +16,7 @@ fetch_token() {
 printf '%s' "$(fetch_token)" > /tmp/share/id-token
 
 sudo apt-get update
-sudo apt-get install -y --no-install-recommends qemu-system-x86-headless qemu-utils
+sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils
 
 cp "$image" /tmp/image.qcow2
 chmod +w /tmp/image.qcow2
