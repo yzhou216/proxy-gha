@@ -16,10 +16,11 @@ fetch_token() {
 printf '%s' "$(fetch_token)" > /tmp/share/id-token
 
 sudo apt-get update
-sudo apt-get install -y qemu-system-x86
+sudo apt-get install -y qemu-system-x86 qemu-utils
 
 cp "$image" /tmp/image.qcow2
 chmod +w /tmp/image.qcow2
+qemu-img resize /tmp/image.qcow2 130G
 
 accel=(-accel tcg,thread=multi)
 test -e /dev/kvm && accel=(-accel kvm -cpu host)

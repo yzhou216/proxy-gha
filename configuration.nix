@@ -1,6 +1,6 @@
 { pkgs, ... }:
 {
-  virtualisation.diskSize = 130 * 1024;
+  virtualisation.diskSize = 10 * 1024;
   boot.growPartition = true;
   boot.kernelModules = [ "9p" "9pnet_virtio" ];
   boot.initrd.availableKernelModules = [ "virtio_pci" "virtio_blk" "virtio_net" "9p" "9pnet_virtio" ];
