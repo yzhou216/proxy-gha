@@ -12,6 +12,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@main
+      - uses: wimpysworld/nothing-but-nix@main
+        with:
+          hatchet-protocol: rampage
+          witness-carnage: true
       - uses: cachix/install-nix-action@master
         with:
           extra_nix_config: |
