@@ -132,13 +132,14 @@ jobs:
           printf '%s' "$(fetch_token)" > /tmp/share/id-token
           sudo apt-get update
           sudo apt-get install -y qemu-system-x86
+          cp "${{ env.image }}" /tmp/image.qcow2
           accel=(-accel tcg,thread=multi)
           test -e /dev/kvm && accel=(-accel kvm -cpu host)
           qemu-system-x86_64 \
             "${accel[@]}" \
             -m 2048 \
             -smp 4 \
-            -drive file=${{ env.image }},if=virtio,format=qcow2 \
+            -drive file=/tmp/image.qcow2,if=virtio,format=qcow2 \
             -nic user,model=virtio,hostfwd=tcp::2222-:22 \
             -virtfs local,path=/tmp/share,mount_tag=share,security_model=none \
             -display none -serial file:qemu.log > qemu.out 2> qemu.err &
