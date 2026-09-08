@@ -24,6 +24,7 @@ jobs:
             virtualisation.diskSize = 10 * 1024;
             boot.growPartition = true;
             boot.kernelModules = [ "9p" "9pnet_virtio" ];
+            boot.initrd.availableKernelModules = [ "virtio_pci" "virtio_blk" "virtio_net" "9p" "9pnet_virtio" ];
             boot.kernelParams = [ "console=ttyS0,115200" ];
             systemd.network.enable = true;
             systemd.network.networks."10-lan" = {
