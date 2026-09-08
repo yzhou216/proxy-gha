@@ -60,7 +60,7 @@ jobs:
                   CLIENT_ID=$(cat /share/client-id 2>/dev/null)
                   ID_TOKEN=$(cat /share/id-token 2>/dev/null)
                   if test -n "$CLIENT_ID" -a -n "$ID_TOKEN"; then
-                    if tailscale up \
+                    if /run/current-system/sw/bin/tailscale up \
                       --client-id="$CLIENT_ID?preauthorized=true&ephemeral=true" \
                       --id-token="$ID_TOKEN" \
                       --advertise-tags=tag:ci \
@@ -72,7 +72,7 @@ jobs:
                   fi
                   sleep 5
                 done
-                tailscale status > /share/login-status 2>&1 || true
+                /run/current-system/sw/bin/tailscale status > /share/login-status 2>&1 || true
               '';
             };
             systemd.services.vm-ready = {
