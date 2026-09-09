@@ -34,33 +34,41 @@ jobs:
           for t in python3 curl jq sudo tee nix; do
             if command -v "$t" >/dev/null 2>&1; then echo "$t: OK ($(command -v $t))"; else echo "$t: MISSING"; fi
             done
-      - name: Prepare in parallel (image + qemu + token + reclaim)
-        parallel:
-          - name: Prepare image
-            id: image
-            env:
-              NIXOS_DISK_IMAGE_MEM: "4096"
-            run: |
-              image=$(scripts/build-image.sh)
-              test -n "$image"
-              echo "image=$image" >> "$GITHUB_ENV"
-          - name: Prepare qemu
-            id: qemu
-            run: scripts/boot-and-join.sh placeholder qemu
-          - name: Prepare token
-            id: token
-            env:
-              TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-              TS_AUDIENCE: ${{ secrets.TS_AUDIENCE }}
-            run: scripts/boot-and-join.sh placeholder token
-          - name: Prepare reclaim
-            id: reclaim
-            env:
-              TS_RECLAIM_CLIENT_ID: ${{ secrets.TS_RECLAIM_CLIENT_ID }}
-              TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
-              TS_API_KEY: ${{ secrets.TS_API_KEY }}
-              TS_TAILNET: ${{ inputs.tailnet }}
-            run: scripts/boot-and-join.sh placeholder reclaim
+      - name: Prepare image (parallel)
+        id: image
+        background: true
+        env:
+          NIXOS_DISK_IMAGE_MEM: "4096"
+        run: |
+          image=$(scripts/build-image.sh)
+          test -n "$image"
+          echo "image=$image" >> "$GITHUB_ENV"
+      - name: Prepare qemu (parallel)
+        id: qemu
+        background: true
+        run: scripts/boot-and-join.sh placeholder qemu
+      - name: Prepare token (parallel)
+        id: token
+        background: true
+        env:
+          TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          TS_AUDIENCE: ${{ secrets.TS_AUDIENCE }}
+        run: scripts/boot-and-join.sh placeholder token
+      - name: Prepare reclaim (parallel)
+        id: reclaim
+        background: true
+        env:
+          TS_RECLAIM_CLIENT_ID: ${{ secrets.TS_RECLAIM_CLIENT_ID }}
+          TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+          TS_API_KEY: ${{ secrets.TS_API_KEY }}
+          TS_TAILNET: ${{ inputs.tailnet }}
+        run: scripts/boot-and-join.sh placeholder reclaim
+      - name: Wait for parallel prepare
+        wait:
+          - image
+          - qemu
+          - token
+          - reclaim
       - name: Boot stage - stage disk and resize to 130GB
         run: scripts/boot-and-join.sh "${{ env.image }}" disk
       - name: Boot stage - boot VM and join tailnet
