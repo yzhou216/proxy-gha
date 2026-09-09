@@ -4,19 +4,26 @@ set -euo pipefail
 image="${1:?usage: boot-and-join.sh <qcow2-image> [stage]}"
 stage="${2:-all}"
 
-WORK=/nix/vm
+WORK="${WORK:-/nix/vm}"
 sudo mkdir -p "$WORK" "$WORK/share"
 sudo chown "$(id -u):$(id -g)" "$WORK" "$WORK/share"
 transcript="$WORK/boot-transcript.log"
 
 mark() {
-  echo "[$(date -u +%H:%M:%S)] $*" | tee -a "$transcript"
+  echo "[$(date -u +%H:%M:%S)] $*"
 }
 
 fetch_token() {
   aud_enc=$(python3 -c 'import urllib.parse,sys;print(urllib.parse.quote(sys.argv[1],safe=""))' "$TS_AUDIENCE")
   curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
     "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$aud_enc" | jq -r .value
+}
+
+add_qemu_to_path() {
+  if [ -n "${QEMU_BIN:-}" ]; then
+    export PATH="$QEMU_BIN/bin:$PATH"
+  fi
+  command -v qemu-img >/dev/null
 }
 
 stage_token() {
@@ -39,16 +46,13 @@ stage_qemu() {
 }
 
 stage_disk() {
-  if [ -n "${QEMU_BIN:-}" ]; then
-    export PATH="$QEMU_BIN/bin:$PATH"
-  fi
-  command -v qemu-img >/dev/null
-  df -h / /nix | tee -a "$transcript"
+  add_qemu_to_path
+  df -h / /nix
   mark "disk: copying $image"
   cp --reflink=auto "$image" "$WORK/image.qcow2"
   chmod +w "$WORK/image.qcow2"
   qemu-img resize "$WORK/image.qcow2" 130G
-  ls -l "$WORK/image.qcow2" >> "$transcript"
+  ls -l "$WORK/image.qcow2"
   mark "disk: ok size=$(du -h "$WORK/image.qcow2" | cut -f1)"
 }
 
@@ -57,15 +61,11 @@ reclaim_token() {
     printf '%s' "$TS_API_KEY"
     return 0
   fi
-  if [ -z "${TS_OAUTH_SECRET:-}" ]; then
-    return 1
-  fi
-  client_id="${TS_RECLAIM_CLIENT_ID:-${TS_OAUTH_CLIENT_ID:-}}"
-  if [ -z "$client_id" ]; then
+  if [ -z "${TS_OAUTH_SECRET:-}" ] || [ -z "${TS_RECLAIM_CLIENT_ID:-}" ]; then
     return 1
   fi
   body=$(curl -sS -X POST -H 'Content-Type: application/json' \
-    -d "{\"grant_type\":\"client_credentials\",\"client_id\":\"$client_id\",\"client_secret\":\"$TS_OAUTH_SECRET\",\"scope\":\"devices:read devices:write\"}" \
+    -d "{\"grant_type\":\"client_credentials\",\"client_id\":\"$TS_RECLAIM_CLIENT_ID\",\"client_secret\":\"$TS_OAUTH_SECRET\",\"scope\":\"devices:read devices:write\"}" \
     https://login.tailscale.com/oauth/token)
   printf '%s' "$body" | jq -r '.access_token // ""'
 }
@@ -92,20 +92,20 @@ stage_reclaim() {
     mark "reclaim: no stale gha-qemu device found"
     return 0
   fi
-  while read -r id; do
-    [ -n "$id" ] || continue
+  mark "reclaim: deleting devices:"
+  printf '%s\n' "$ids"
+  for id in $ids; do
     mark "reclaim: deleting device $id"
     curl -sS -X DELETE -H "Authorization: Bearer $token" \
       "https://api.tailscale.com/api/v2/device/$id" > /dev/null
-  done <<< "$ids"
+  done
   mark "reclaim: done"
 }
 
 stage_boot() {
-  if [ -n "${QEMU_BIN:-}" ]; then
-    export PATH="$QEMU_BIN/bin:$PATH"
-  fi
-  command -v qemu-system-x86_64 qemu-img >/dev/null
+  add_qemu_to_path
+  command -v qemu-system-x86_64 >/dev/null
+  # shellcheck disable=SC2054 # QEMU expects a single comma-joined arg
   accel=(-accel tcg,thread=multi)
   test -e /dev/kvm && accel=(-accel kvm -cpu host)
   mark "boot: accel=${accel[*]} starting qemu"
@@ -138,12 +138,10 @@ stage_boot() {
     sleep 10
   done
   mark "boot: vm_ready=$vm_ready login=$ok"
-  mark "=== login-status ==="
-  cat "$WORK/share/login-status" 2>/dev/null | tee -a "$transcript" || true
-  mark "=== qemu.err ==="
-  tail -40 "$WORK/qemu.err" 2>/dev/null | tee -a "$transcript" || true
-  mark "=== qemu.log ==="
-  tail -60 "$WORK/qemu.log" 2>/dev/null | tee -a "$transcript" || true
+  for f in login-status qemu.err qemu.log; do
+    mark "=== $f ==="
+    tail -60 "$WORK/$f" 2>/dev/null || true
+  done
   if [ "$ok" = yes ]; then
     mark "boot: VM joined tailnet, keeping alive 5h59m"
     sleep 21540
