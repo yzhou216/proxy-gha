@@ -26,6 +26,14 @@ jobs:
         run: |
           image=$(scripts/build-image.sh)
           echo "image=$image" >> "$GITHUB_ENV"
+      - name: Runner preflight
+        run: |
+          echo "=== df ==="; df -h
+          echo "=== disk on / ==="; df -h / | tail -1
+          echo "=== tools ==="
+          for t in python3 curl jq sudo apt-get qemu-img qemu-system-x86_64 tee; do
+            if command -v "$t" >/dev/null 2>&1; then echo "$t: OK ($(command -v $t))"; else echo "$t: MISSING"; fi
+            done
       - name: Boot NixOS VM and join tailnet
         id: boot
         env:

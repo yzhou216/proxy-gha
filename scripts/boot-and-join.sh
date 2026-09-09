@@ -16,8 +16,9 @@ fetch_token() {
 
 printf '%s' "$(fetch_token)" > /tmp/share/id-token
 
-sudo apt-get update
-sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils
+QEMU_BIN=$(nix build --no-link --print-out-paths nixpkgs#qemu --accept-flake-config 2>/dev/null | tail -1)
+export PATH="$QEMU_BIN/bin:$PATH"
+command -v qemu-system-x86_64 qemu-img
 
 cp "$image" /tmp/image.qcow2
 chmod +w /tmp/image.qcow2
