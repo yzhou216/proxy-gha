@@ -39,6 +39,10 @@ stage_qemu() {
 }
 
 stage_disk() {
+  if [ -n "${QEMU_BIN:-}" ]; then
+    export PATH="$QEMU_BIN/bin:$PATH"
+  fi
+  command -v qemu-img >/dev/null
   df -h / /nix | tee -a "$transcript"
   mark "disk: copying $image"
   cp --reflink=auto "$image" "$WORK/image.qcow2"
