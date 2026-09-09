@@ -57,11 +57,15 @@ reclaim_token() {
     printf '%s' "$TS_API_KEY"
     return 0
   fi
-  if [ -z "${TS_OAUTH_SECRET:-}" ] || [ -z "${TS_OAUTH_CLIENT_ID:-}" ]; then
+  if [ -z "${TS_OAUTH_SECRET:-}" ]; then
+    return 1
+  fi
+  client_id="${TS_RECLAIM_CLIENT_ID:-${TS_OAUTH_CLIENT_ID:-}}"
+  if [ -z "$client_id" ]; then
     return 1
   fi
   body=$(curl -sS -X POST -H 'Content-Type: application/json' \
-    -d "{\"grant_type\":\"client_credentials\",\"client_id\":\"$TS_OAUTH_CLIENT_ID\",\"client_secret\":\"$TS_OAUTH_SECRET\",\"scope\":\"devices:read devices:write\"}" \
+    -d "{\"grant_type\":\"client_credentials\",\"client_id\":\"$client_id\",\"client_secret\":\"$TS_OAUTH_SECRET\",\"scope\":\"devices:read devices:write\"}" \
     https://login.tailscale.com/oauth/token)
   printf '%s' "$body" | jq -r '.access_token // ""'
 }
