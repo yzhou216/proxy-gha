@@ -27,7 +27,20 @@ jobs:
           image=$(scripts/build-image.sh)
           echo "image=$image" >> "$GITHUB_ENV"
       - name: Boot NixOS VM and join tailnet
+        id: boot
         env:
           TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           TS_AUDIENCE: ${{ secrets.TS_AUDIENCE }}
         run: scripts/boot-and-join.sh "${{ env.image }}"
+      - name: Collect boot diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: boot-diagnostics
+          path: |
+            boot-transcript.log
+            qemu.log
+            qemu.err
+            qemu.out
+            /tmp/share/login-status
+          if-no-files-found: warn

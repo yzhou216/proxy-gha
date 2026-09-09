@@ -3,6 +3,7 @@ set -euo pipefail
 
 image="${1:?usage: boot-and-join.sh <qcow2-image>}"
 set -x
+exec > >(tee boot-transcript.log) 2>&1
 
 mkdir -p /tmp/share
 printf '%s' "$TS_OAUTH_CLIENT_ID" > /tmp/share/client-id
