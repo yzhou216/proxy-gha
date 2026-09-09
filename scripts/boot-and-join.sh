@@ -96,8 +96,8 @@ stage_boot() {
   mark "=== qemu.log ==="
   tail -60 "$WORK/qemu.log" 2>/dev/null | tee -a "$transcript" || true
   if [ "$ok" = yes ]; then
-    mark "boot: VM joined tailnet, keeping alive 10 minutes"
-    sleep 600
+    mark "boot: VM joined tailnet, keeping alive 5h59m"
+    sleep 21540
   fi
   kill "$qemu_pid" 2>/dev/null || true
   wait "$qemu_pid" 2>/dev/null || true
