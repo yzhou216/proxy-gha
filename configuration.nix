@@ -6,6 +6,7 @@
   boot.initrd.availableKernelModules = [ "virtio_pci" "virtio_blk" "virtio_net" "9p" "9pnet_virtio" ];
   boot.kernelParams = [ "console=ttyS0,115200" ];
   systemd.network.enable = true;
+  networking.useNetworkd = true;
   systemd.network.networks."10-lan" = {
     matchConfig.Name = "*";
     networkConfig.DHCP = "yes";
