@@ -52,14 +52,33 @@ stage_disk() {
   mark "disk: ok size=$(du -h "$WORK/image.qcow2" | cut -f1)"
 }
 
+reclaim_token() {
+  if [ -n "${TS_API_KEY:-}" ]; then
+    printf '%s' "$TS_API_KEY"
+    return 0
+  fi
+  if [ -z "${TS_OAUTH_SECRET:-}" ] || [ -z "${TS_OAUTH_CLIENT_ID:-}" ]; then
+    return 1
+  fi
+  body=$(curl -sS -X POST -H 'Content-Type: application/json' \
+    -d "{\"grant_type\":\"client_credentials\",\"client_id\":\"$TS_OAUTH_CLIENT_ID\",\"client_secret\":\"$TS_OAUTH_SECRET\",\"scope\":\"devices:read devices:write\"}" \
+    https://login.tailscale.com/oauth/token)
+  printf '%s' "$body" | jq -r '.access_token // ""'
+}
+
 stage_reclaim() {
-  if [ -z "${TS_API_KEY:-}" ] || [ -z "${TS_TAILNET:-}" ]; then
-    mark "reclaim: skipped (TS_API_KEY/TS_TAILNET not set)"
+  if [ -z "${TS_TAILNET:-}" ]; then
+    mark "reclaim: skipped (TS_TAILNET not set)"
+    return 0
+  fi
+  token=$(reclaim_token) || true
+  if [ -z "$token" ]; then
+    mark "reclaim: skipped (set TS_API_KEY or TS_OAUTH_SECRET)"
     return 0
   fi
   base="https://api.tailscale.com/api/v2/tailnet/$TS_TAILNET/devices"
   mark "reclaim: listing devices from $base"
-  devices=$(curl -sS -H "Authorization: Bearer $TS_API_KEY" "$base")
+  devices=$(curl -sS -H "Authorization: Bearer $token" "$base")
   ids=$(printf '%s' "$devices" | jq -r '
     .devices[]
     | select((.hostname == "gha-qemu" or .name == "gha-qemu") and ((.tags // []) | index("tag:ci")))
@@ -72,7 +91,7 @@ stage_reclaim() {
   while read -r id; do
     [ -n "$id" ] || continue
     mark "reclaim: deleting device $id"
-    curl -sS -X DELETE -H "Authorization: Bearer $TS_API_KEY" \
+    curl -sS -X DELETE -H "Authorization: Bearer $token" \
       "https://api.tailscale.com/api/v2/device/$id" > /dev/null
   done <<< "$ids"
   mark "reclaim: done"
