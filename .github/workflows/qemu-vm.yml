@@ -49,6 +49,7 @@ jobs:
         env:
           TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+          TS_API_KEY: ${{ secrets.TS_API_KEY }}
           TS_TAILNET: ${{ inputs.tailnet }}
         run: scripts/boot-and-join.sh "${{ env.image }}" reclaim
       - name: Boot stage 3 - provision qemu via nix
