@@ -29,9 +29,9 @@ stage_token() {
 }
 
 stage_qemu() {
-  mark "qemu: installing qemu-system-x86 via apt"
+  mark "qemu: installing qemu-system-x86 and qemu-utils via apt"
   sudo apt-get update -qq
-  sudo apt-get install -y -qq qemu-system-x86
+  sudo apt-get install -y -qq --no-install-recommends qemu-system-x86 qemu-utils
   command -v qemu-system-x86_64 qemu-img >/dev/null
   mark "qemu: ok $(qemu-system-x86_64 --version | head -1)"
 }
