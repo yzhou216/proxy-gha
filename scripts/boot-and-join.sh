@@ -52,6 +52,32 @@ stage_disk() {
   mark "disk: ok size=$(du -h "$WORK/image.qcow2" | cut -f1)"
 }
 
+stage_reclaim() {
+  if [ -z "${TS_API_KEY:-}" ] || [ -z "${TS_TAILNET:-}" ]; then
+    mark "reclaim: skipped (TS_API_KEY/TS_TAILNET not set)"
+    return 0
+  fi
+  base="https://api.tailscale.com/api/v2/tailnet/$TS_TAILNET/devices"
+  mark "reclaim: listing devices from $base"
+  devices=$(curl -sS -H "Authorization: Bearer $TS_API_KEY" "$base")
+  ids=$(printf '%s' "$devices" | jq -r '
+    .devices[]
+    | select((.hostname == "gha-qemu" or .name == "gha-qemu") and ((.tags // []) | index("tag:ci")))
+    | .id
+  ' 2>/dev/null || true)
+  if [ -z "$ids" ]; then
+    mark "reclaim: no stale gha-qemu device found"
+    return 0
+  fi
+  while read -r id; do
+    [ -n "$id" ] || continue
+    mark "reclaim: deleting device $id"
+    curl -sS -X DELETE -H "Authorization: Bearer $TS_API_KEY" \
+      "https://api.tailscale.com/api/v2/device/$id" > /dev/null
+  done <<< "$ids"
+  mark "reclaim: done"
+}
+
 stage_boot() {
   if [ -n "${QEMU_BIN:-}" ]; then
     export PATH="$QEMU_BIN/bin:$PATH"
@@ -109,9 +135,10 @@ exec > >(tee "$transcript") 2>&1
 
 case "$stage" in
   token) stage_token ;;
+  reclaim) stage_reclaim ;;
   qemu) stage_qemu ;;
   disk) stage_disk ;;
   boot) stage_boot ;;
-  all) stage_token && stage_qemu && stage_disk && stage_boot ;;
+  all) stage_token && stage_reclaim && stage_qemu && stage_disk && stage_boot ;;
   *) echo "unknown stage $stage" >&2; exit 2 ;;
 esac
