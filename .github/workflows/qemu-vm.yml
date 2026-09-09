@@ -17,36 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@main
-      - uses: wimpysworld/nothing-but-nix@main
-        with:
-          hatchet-protocol: rampage
-          witness-carnage: true
-          root-safe-haven: 4096
-      - uses: cachix/install-nix-action@master
-        with:
-          extra_nix_config: |
-            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
-      - name: Runner preflight
-        run: |
-          echo "=== df ==="; df -h
-          echo "=== disk on / ==="; df -h / | tail -1
-          echo "=== tools ==="
-          for t in python3 curl jq sudo tee nix; do
-            if command -v "$t" >/dev/null 2>&1; then echo "$t: OK ($(command -v $t))"; else echo "$t: MISSING"; fi
-            done
-      - name: Prepare image (parallel)
-        id: image
-        background: true
-        env:
-          NIXOS_DISK_IMAGE_MEM: "4096"
-        run: |
-          image=$(scripts/build-image.sh)
-          test -n "$image"
-          echo "image=$image" >> "$GITHUB_ENV"
-      - name: Prepare qemu (parallel)
-        id: qemu
-        background: true
-        run: scripts/boot-and-join.sh placeholder qemu
       - name: Prepare token (parallel)
         id: token
         background: true
@@ -63,6 +33,36 @@ jobs:
           TS_API_KEY: ${{ secrets.TS_API_KEY }}
           TS_TAILNET: ${{ inputs.tailnet }}
         run: scripts/boot-and-join.sh placeholder reclaim
+      - uses: wimpysworld/nothing-but-nix@main
+        with:
+          hatchet-protocol: rampage
+          witness-carnage: true
+          root-safe-haven: 4096
+      - name: Prepare qemu (parallel)
+        id: qemu
+        background: true
+        run: scripts/boot-and-join.sh placeholder qemu
+      - uses: cachix/install-nix-action@master
+        with:
+          extra_nix_config: |
+            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
+      - name: Runner preflight
+        run: |
+          echo "=== df ==="; df -h
+          echo "=== disk on / ==="; df -h / | tail -1
+          echo "=== tools ==="
+          for t in python3 curl jq sudo tee nix qemu-system-x86_64; do
+            if command -v "$t" >/dev/null 2>&1; then echo "$t: OK ($(command -v $t))"; else echo "$t: MISSING"; fi
+            done
+      - name: Prepare image (parallel)
+        id: image
+        background: true
+        env:
+          NIXOS_DISK_IMAGE_MEM: "4096"
+        run: |
+          image=$(scripts/build-image.sh)
+          test -n "$image"
+          echo "image=$image" >> "$GITHUB_ENV"
       - name: Wait for parallel prepare
         wait:
           - image

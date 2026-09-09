@@ -19,13 +19,6 @@ fetch_token() {
     "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$aud_enc" | jq -r .value
 }
 
-add_qemu_to_path() {
-  if [ -n "${QEMU_BIN:-}" ]; then
-    export PATH="$QEMU_BIN/bin:$PATH"
-  fi
-  command -v qemu-img >/dev/null
-}
-
 stage_token() {
   mark "token: share=$WORK/share"
   printf '%s' "$TS_OAUTH_CLIENT_ID" > "$WORK/share/client-id"
@@ -36,17 +29,15 @@ stage_token() {
 }
 
 stage_qemu() {
-  mark "qemu: building nixpkgs#qemu"
-  QEMU_BIN=$(nix build --no-link --print-out-paths nixpkgs#qemu --accept-flake-config 2>&1 | tail -1)
-  command -v "$QEMU_BIN/bin/qemu-system-x86_64" "$QEMU_BIN/bin/qemu-img" >/dev/null
-  mark "qemu: ok $QEMU_BIN"
-  if [ -n "${GITHUB_ENV:-}" ]; then
-    printf 'QEMU_BIN=%s\n' "$QEMU_BIN" >> "$GITHUB_ENV"
-  fi
+  mark "qemu: installing qemu-system-x86 via apt"
+  sudo apt-get update -qq
+  sudo apt-get install -y -qq qemu-system-x86
+  command -v qemu-system-x86_64 qemu-img >/dev/null
+  mark "qemu: ok $(qemu-system-x86_64 --version | head -1)"
 }
 
 stage_disk() {
-  add_qemu_to_path
+  command -v qemu-img >/dev/null
   df -h / /nix
   mark "disk: copying $image"
   cp --reflink=auto "$image" "$WORK/image.qcow2"
@@ -103,7 +94,6 @@ stage_reclaim() {
 }
 
 stage_boot() {
-  add_qemu_to_path
   command -v qemu-system-x86_64 >/dev/null
   # shellcheck disable=SC2054 # QEMU expects a single comma-joined arg
   accel=(-accel tcg,thread=multi)
