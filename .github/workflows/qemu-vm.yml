@@ -17,6 +17,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@main
+      - uses: wimpysworld/nothing-but-nix@main
+        with:
+          hatchet-protocol: rampage
+          witness-carnage: true
+          root-safe-haven: 4096
       - name: Prepare token (parallel)
         id: token
         background: true
@@ -33,11 +38,6 @@ jobs:
           TS_API_KEY: ${{ secrets.TS_API_KEY }}
           TS_TAILNET: ${{ inputs.tailnet }}
         run: scripts/boot-and-join.sh placeholder reclaim
-      - uses: wimpysworld/nothing-but-nix@main
-        with:
-          hatchet-protocol: rampage
-          witness-carnage: true
-          root-safe-haven: 4096
       - name: Prepare qemu (parallel)
         id: qemu
         background: true
