@@ -35,22 +35,32 @@ jobs:
             if command -v "$t" >/dev/null 2>&1; then echo "$t: OK ($(command -v $t))"; else echo "$t: MISSING"; fi
             done
       - name: Prepare in parallel (image + qemu + token + reclaim)
-        env:
-          NIXOS_DISK_IMAGE_MEM: "4096"
-          TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          TS_AUDIENCE: ${{ secrets.TS_AUDIENCE }}
-          TS_RECLAIM_CLIENT_ID: ${{ secrets.TS_RECLAIM_CLIENT_ID }}
-          TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
-          TS_API_KEY: ${{ secrets.TS_API_KEY }}
-          TS_TAILNET: ${{ inputs.tailnet }}
-        run: |
-          set -euo pipefail
-          pids=()
-          ( image=$(scripts/build-image.sh); test -n "$image"; echo "image=$image" >> "$GITHUB_ENV" ) & pids+=($!)
-          ( scripts/boot-and-join.sh placeholder qemu ) & pids+=($!)
-          ( scripts/boot-and-join.sh placeholder token ) & pids+=($!)
-          ( scripts/boot-and-join.sh placeholder reclaim ) & pids+=($!)
-          for p in "${pids[@]}"; do wait "$p" || exit 1; done
+        parallel:
+          - name: Prepare image
+            id: image
+            env:
+              NIXOS_DISK_IMAGE_MEM: "4096"
+            run: |
+              image=$(scripts/build-image.sh)
+              test -n "$image"
+              echo "image=$image" >> "$GITHUB_ENV"
+          - name: Prepare qemu
+            id: qemu
+            run: scripts/boot-and-join.sh placeholder qemu
+          - name: Prepare token
+            id: token
+            env:
+              TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+              TS_AUDIENCE: ${{ secrets.TS_AUDIENCE }}
+            run: scripts/boot-and-join.sh placeholder token
+          - name: Prepare reclaim
+            id: reclaim
+            env:
+              TS_RECLAIM_CLIENT_ID: ${{ secrets.TS_RECLAIM_CLIENT_ID }}
+              TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+              TS_API_KEY: ${{ secrets.TS_API_KEY }}
+              TS_TAILNET: ${{ inputs.tailnet }}
+            run: scripts/boot-and-join.sh placeholder reclaim
       - name: Boot stage - stage disk and resize to 130GB
         run: scripts/boot-and-join.sh "${{ env.image }}" disk
       - name: Boot stage - boot VM and join tailnet
