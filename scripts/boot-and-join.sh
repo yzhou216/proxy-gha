@@ -7,7 +7,7 @@ stage="${2:-all}"
 WORK="${WORK:-/nix/vm}"
 sudo mkdir -p "$WORK" "$WORK/share"
 sudo chown "$(id -u):$(id -g)" "$WORK" "$WORK/share"
-transcript="$WORK/boot-transcript.log"
+transcript="$WORK/boot-transcript.${stage}.log"
 
 mark() {
   echo "[$(date -u +%H:%M:%S)] $*"
