@@ -16,6 +16,7 @@ jobs:
         with:
           hatchet-protocol: rampage
           witness-carnage: true
+          root-safe-haven: 4096
       - uses: cachix/install-nix-action@master
         with:
           extra_nix_config: |
@@ -31,24 +32,34 @@ jobs:
           echo "=== df ==="; df -h
           echo "=== disk on / ==="; df -h / | tail -1
           echo "=== tools ==="
-          for t in python3 curl jq sudo apt-get qemu-img qemu-system-x86_64 tee; do
+          for t in python3 curl jq sudo tee nix; do
             if command -v "$t" >/dev/null 2>&1; then echo "$t: OK ($(command -v $t))"; else echo "$t: MISSING"; fi
             done
-      - name: Boot NixOS VM and join tailnet
-        id: boot
+      - name: Boot stage 1 - OIDC token via 9p share
         env:
           TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           TS_AUDIENCE: ${{ secrets.TS_AUDIENCE }}
-        run: scripts/boot-and-join.sh "${{ env.image }}"
+        run: scripts/boot-and-join.sh "${{ env.image }}" token
+      - name: Boot stage 2 - provision qemu via nix
+        run: scripts/boot-and-join.sh "${{ env.image }}" qemu
+      - name: Boot stage 3 - stage disk and resize to 130GB
+        run: scripts/boot-and-join.sh "${{ env.image }}" disk
+      - name: Boot stage 4 - boot VM and join tailnet
+        id: boot
+        timeout-minutes: 25
+        env:
+          TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          TS_AUDIENCE: ${{ secrets.TS_AUDIENCE }}
+        run: scripts/boot-and-join.sh "${{ env.image }}" boot
       - name: Collect boot diagnostics
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: boot-diagnostics
           path: |
-            boot-transcript.log
-            qemu.log
-            qemu.err
-            qemu.out
-            /tmp/share/login-status
+            /nix/vm/boot-transcript.log
+            /nix/vm/qemu.log
+            /nix/vm/qemu.err
+            /nix/vm/qemu.out
+            /nix/vm/share/login-status
           if-no-files-found: warn
