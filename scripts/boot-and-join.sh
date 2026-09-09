@@ -6,7 +6,7 @@ stage="${2:-all}"
 
 WORK="${WORK:-/nix/vm}"
 sudo mkdir -p "$WORK" "$WORK/share"
-sudo chown "$(id -u):$(id -g)" "$WORK" "$WORK/share"
+sudo chown -R "$(id -u):$(id -g)" "$WORK"
 transcript="$WORK/boot-transcript.${stage}.log"
 
 mark() {
@@ -19,13 +19,24 @@ fetch_token() {
     "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$aud_enc" | jq -r .value
 }
 
+put_token() {
+  local token
+  token=$(fetch_token)
+  test -n "$token" || { mark "token: empty token"; return 1; }
+  printf '%s' "$token" > "$WORK/share/id-token" 2>/dev/null || {
+    mark "token: direct write failed, retrying via sudo tee"
+    printf '%s' "$token" | sudo tee "$WORK/share/id-token" >/dev/null
+  }
+  local size
+  size=$(wc -c < "$WORK/share/id-token")
+  mark "token: wrote ${size} bytes to $WORK/share/id-token"
+}
+
 stage_token() {
   mark "token: share=$WORK/share"
   printf '%s' "$TS_OAUTH_CLIENT_ID" > "$WORK/share/client-id"
-  token=$(fetch_token)
-  test -n "$token" || { mark "token: empty token"; return 1; }
-  printf '%s' "$token" > "$WORK/share/id-token"
-  mark "token: ok len=${#token}"
+  put_token
+  mark "token: ok"
 }
 
 stage_qemu() {
@@ -55,7 +66,11 @@ reclaim_token() {
   if [ -z "${TS_OAUTH_SECRET:-}" ] || [ -z "${TS_RECLAIM_CLIENT_ID:-}" ]; then
     return 1
   fi
-  body=$(curl -sS -X POST -H 'Content-Type: application/json' \
+  body=$(curl -sS -X POST \
+    -H 'Content-Type: application/json' \
+    -H 'Sec-Fetch-Site: cross-site' \
+    -H 'Sec-Fetch-Mode: cors' \
+    -H 'User-Agent: proxy-gha' \
     -d "{\"grant_type\":\"client_credentials\",\"client_id\":\"$TS_RECLAIM_CLIENT_ID\",\"client_secret\":\"$TS_OAUTH_SECRET\",\"scope\":\"devices:read devices:write\"}" \
     https://login.tailscale.com/oauth/token)
   printf '%s' "$body" | jq -r '.access_token // ""'
@@ -95,6 +110,9 @@ stage_reclaim() {
 
 stage_boot() {
   command -v qemu-system-x86_64 >/dev/null
+  mark "boot: share perms:"
+  ls -ld "$WORK" "$WORK/share" 2>&1 | sed 's/^/  /'
+  ls -la "$WORK/share" 2>&1 | sed 's/^/  /'
   # shellcheck disable=SC2054 # QEMU expects a single comma-joined arg
   accel=(-accel tcg,thread=multi)
   test -e /dev/kvm && accel=(-accel kvm -cpu host)
@@ -113,7 +131,7 @@ stage_boot() {
   ok=no
   deadline=$((SECONDS + 1200))
   while [ $SECONDS -lt $deadline ]; do
-    printf '%s' "$(fetch_token)" > "$WORK/share/id-token"
+    put_token || { mark "boot: token write failed, retrying"; sleep 10; continue; }
     if grep -q VM-READY "$WORK/qemu.log" 2>/dev/null; then
       vm_ready=yes
     fi
