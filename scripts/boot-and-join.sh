@@ -66,13 +66,11 @@ reclaim_token() {
   if [ -z "${TS_OAUTH_SECRET:-}" ] || [ -z "${TS_RECLAIM_CLIENT_ID:-}" ]; then
     return 1
   fi
-  body=$(curl -sS -X POST \
-    -H 'Content-Type: application/json' \
-    -H 'Sec-Fetch-Site: cross-site' \
-    -H 'Sec-Fetch-Mode: cors' \
-    -H 'User-Agent: proxy-gha' \
-    -d "{\"grant_type\":\"client_credentials\",\"client_id\":\"$TS_RECLAIM_CLIENT_ID\",\"client_secret\":\"$TS_OAUTH_SECRET\",\"scope\":\"devices:read devices:write\"}" \
-    https://login.tailscale.com/oauth/token)
+  body=$(curl -sS \
+    -d "client_id=$TS_RECLAIM_CLIENT_ID" \
+    -d "client_secret=$TS_OAUTH_SECRET" \
+    -d "scope=devices:core" \
+    https://api.tailscale.com/api/v2/oauth/token)
   printf '%s' "$body" | jq -r '.access_token // ""'
 }
 
@@ -83,10 +81,10 @@ stage_reclaim() {
   fi
   token=$(reclaim_token) || true
   if [ -z "$token" ]; then
-    mark "reclaim: skipped (set TS_API_KEY or TS_OAUTH_SECRET)"
+    mark "reclaim: skipped (unable to obtain access token)"
     return 0
   fi
-  base="https://api.tailscale.com/api/v2/tailnet/$TS_TAILNET/devices"
+  base="https://api.tailscale.com/api/v2/tailnet/-/devices"
   mark "reclaim: listing devices from $base"
   devices=$(curl -sS -H "Authorization: Bearer $token" "$base")
   ids=$(printf '%s' "$devices" | jq -r '
