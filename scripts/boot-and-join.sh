@@ -111,9 +111,11 @@ stage_boot() {
   mark "boot: share perms:"
   ls -ld "$WORK" "$WORK/share" 2>&1 | sed 's/^/  /'
   ls -la "$WORK/share" 2>&1 | sed 's/^/  /'
+  # Use fixed cpu model.  With -cpu host on AMD runners, svm and ccp CPUID
+  # bits pass through and udev autoloads kvm_amd, crashing the guest kernel.
   # shellcheck disable=SC2054 # QEMU expects a single comma-joined arg
   accel=(-accel tcg,thread=multi)
-  test -e /dev/kvm && accel=(-accel kvm -cpu host)
+  test -e /dev/kvm && accel=(-accel kvm -cpu qemu64)
   mark "boot: accel=${accel[*]} starting qemu"
   qemu-system-x86_64 \
     "${accel[@]}" \
