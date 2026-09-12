@@ -201,8 +201,10 @@ stage_boot() {
       mark "boot: vm ready, starting takeover"
       stage_takeover || mark "boot: takeover failed, continuing"
     fi
-    if [ "$takeover_done" = yes ]; then
+    if [ "$takeover_done" = yes ] && [ ! -e "$WORK/share/takeover-done" ]; then
       put_token || { mark "boot: token write failed, retrying"; sleep 10; continue; }
+      printf 'done' > "$WORK/share/takeover-done"
+      mark "boot: takeover complete, released guest login"
     fi
     if [ -f "$WORK/share/login-ok" ]; then
       ok=yes

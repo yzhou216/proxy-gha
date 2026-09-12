@@ -33,7 +33,7 @@
     script = ''
       set -x
       for i in $(seq 1 40); do
-        test -f /share/client-id -a -f /share/id-token && break
+        test -f /share/client-id -a -f /share/id-token -a -f /share/takeover-done && break
         sleep 3
       done
       for i in $(seq 1 20); do
