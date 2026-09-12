@@ -150,9 +150,10 @@ stage_boot() {
     mark "=== $f ==="
     tail -60 "$WORK/$f" 2>/dev/null || true
   done
+  keepalive="${TS_KEEPALIVE_SECONDS:-21540}"
   if [ "$ok" = yes ]; then
-    mark "boot: VM joined tailnet, keeping alive 5h59m"
-    sleep 21540
+    mark "boot: VM joined tailnet, keeping alive ${keepalive}s"
+    sleep "$keepalive"
   fi
   kill "$qemu_pid" 2>/dev/null || true
   wait "$qemu_pid" 2>/dev/null || true

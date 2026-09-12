@@ -7,6 +7,11 @@ on:
         description: 'Tailscale tailnet name for Admin API device cleanup'
         required: true
         type: string
+      keepalive_seconds:
+        description: 'How long to keep the VM alive after join (default 21540)'
+        required: false
+        default: '21540'
+        type: string
 
 permissions:
   id-token: write
@@ -76,6 +81,7 @@ jobs:
         env:
           TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           TS_AUDIENCE: ${{ secrets.TS_AUDIENCE }}
+          TS_KEEPALIVE_SECONDS: ${{ inputs.keepalive_seconds }}
         run: scripts/boot-and-join.sh "${{ env.image }}" boot
       - name: Collect boot diagnostics
         if: always()
