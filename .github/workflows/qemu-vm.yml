@@ -82,18 +82,18 @@ jobs:
             cp "$image" "${{ runner.temp }}/nixos-image.qcow2"
           fi
           echo "image=$image" >> "$GITHUB_ENV"
-      - name: Save image cache
-        if: steps.cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ runner.temp }}/nixos-image.qcow2
-          key: nixos-image-${{ hashFiles('configuration.nix', 'flake.lock', 'scripts/build-image.sh') }}
       - name: Wait for parallel prepare
         wait:
           - image
           - qemu
           - token
           - reclaim
+      - name: Save image cache
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/nixos-image.qcow2
+          key: nixos-image-${{ hashFiles('configuration.nix', 'flake.lock', 'scripts/build-image.sh') }}
       - name: Boot stage - stage disk and resize to 130GB
         run: scripts/boot-and-join.sh "${{ env.image }}" disk
       - name: Boot stage - boot VM and join tailnet
