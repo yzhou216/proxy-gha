@@ -8,13 +8,16 @@ on:
         required: true
         type: string
       keepalive_seconds:
-        description: 'How long to keep the VM alive after join (default 21540)'
+        description: 'How long to keep the VM alive after join (default 20000)'
         required: false
-        default: '21540'
+        default: '20000'
         type: string
+  schedule:
+    - cron: '23 */2 * * *'
 
 permissions:
   id-token: write
+  actions: write
   contents: read
 
 jobs:
@@ -41,7 +44,7 @@ jobs:
           TS_RECLAIM_CLIENT_ID: ${{ secrets.TS_RECLAIM_CLIENT_ID }}
           TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
           TS_API_KEY: ${{ secrets.TS_API_KEY }}
-          TS_TAILNET: ${{ inputs.tailnet }}
+          TS_TAILNET: ${{ inputs.tailnet || 'marten-tet' }}
         run: scripts/boot-and-join.sh placeholder reclaim
       - name: Prepare qemu (parallel)
         id: qemu
@@ -59,15 +62,32 @@ jobs:
           for t in python3 curl jq sudo tee nix qemu-system-x86_64; do
             if command -v "$t" >/dev/null 2>&1; then echo "$t: OK ($(command -v $t))"; else echo "$t: MISSING"; fi
             done
+      - name: Restore image cache
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/nixos-image.qcow2
+          key: nixos-image-${{ hashFiles('configuration.nix', 'flake.lock', 'scripts/build-image.sh') }}
       - name: Prepare image (parallel)
         id: image
         background: true
         env:
           NIXOS_DISK_IMAGE_MEM: "4096"
         run: |
-          image=$(scripts/build-image.sh)
-          test -n "$image"
+          if [ -f "${{ runner.temp }}/nixos-image.qcow2" ]; then
+            image="${{ runner.temp }}/nixos-image.qcow2"
+          else
+            image=$(scripts/build-image.sh)
+            test -n "$image"
+            cp "$image" "${{ runner.temp }}/nixos-image.qcow2"
+          fi
           echo "image=$image" >> "$GITHUB_ENV"
+      - name: Save image cache
+        if: steps.cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/nixos-image.qcow2
+          key: nixos-image-${{ hashFiles('configuration.nix', 'flake.lock', 'scripts/build-image.sh') }}
       - name: Wait for parallel prepare
         wait:
           - image
@@ -81,7 +101,12 @@ jobs:
         env:
           TS_OAUTH_CLIENT_ID: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           TS_AUDIENCE: ${{ secrets.TS_AUDIENCE }}
-          TS_KEEPALIVE_SECONDS: ${{ inputs.keepalive_seconds }}
+          TS_RECLAIM_CLIENT_ID: ${{ secrets.TS_RECLAIM_CLIENT_ID }}
+          TS_OAUTH_SECRET: ${{ secrets.TS_OAUTH_SECRET }}
+          TS_API_KEY: ${{ secrets.TS_API_KEY }}
+          TS_TAILNET: ${{ inputs.tailnet || 'marten-tet' }}
+          TS_KEEPALIVE_SECONDS: ${{ inputs.keepalive_seconds || '20000' }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: scripts/boot-and-join.sh "${{ env.image }}" boot
       - name: Collect boot diagnostics
         if: always()

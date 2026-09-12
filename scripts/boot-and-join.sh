@@ -74,28 +74,36 @@ reclaim_token() {
   printf '%s' "$body" | jq -r '.access_token // ""'
 }
 
-stage_reclaim() {
-  if [ -z "${TS_TAILNET:-}" ]; then
-    mark "reclaim: skipped (TS_TAILNET not set)"
-    return 0
-  fi
+stale_gha_qemu_ids() {
+  local mode="$1" token base devices
   token=$(reclaim_token) || true
   if [ -z "$token" ]; then
     mark "reclaim: skipped (unable to obtain access token)"
     return 0
   fi
   base="https://api.tailscale.com/api/v2/tailnet/-/devices"
-  mark "reclaim: listing devices from $base"
   devices=$(curl -sS -H "Authorization: Bearer $token" "$base")
-  ids=$(printf '%s' "$devices" | jq -r '
+  printf '%s' "$devices" | jq -r --arg mode "$mode" '
     .devices[]
     | select((.hostname == "gha-qemu" or .name == "gha-qemu") and ((.tags // []) | index("tag:ci")))
+    | select(($mode == "all") or (($mode == "offline") and ((.online // false) == false)))
     | .id
-  ' 2>/dev/null || true)
+  ' 2>/dev/null || true
+}
+
+reclaim_delete() {
+  local mode="$1" ids token base
+  token=$(reclaim_token) || true
+  if [ -z "$token" ]; then
+    mark "reclaim: skipped (unable to obtain access token)"
+    return 0
+  fi
+  ids=$(stale_gha_qemu_ids "$mode")
   if [ -z "$ids" ]; then
     mark "reclaim: no stale gha-qemu device found"
     return 0
   fi
+  base="https://api.tailscale.com/api/v2/tailnet/-/devices"
   mark "reclaim: deleting devices:"
   printf '%s\n' "$ids"
   for id in $ids; do
@@ -104,6 +112,55 @@ stage_reclaim() {
       "https://api.tailscale.com/api/v2/device/$id" > /dev/null
   done
   mark "reclaim: done"
+}
+
+stage_reclaim() {
+  if [ -z "${TS_TAILNET:-}" ]; then
+    mark "reclaim: skipped (TS_TAILNET not set)"
+    return 0
+  fi
+  reclaim_delete offline
+}
+
+stage_takeover() {
+  mark "takeover: deleting superseded gha-qemu devices"
+  reclaim_delete all
+  if [ -n "${GITHUB_RUN_ID:-}" ] && command -v gh >/dev/null 2>&1; then
+    runs=$(gh run list --workflow=qemu-vm.yml --status=in_progress --limit 50 \
+      --json databaseId 2>/dev/null | jq -r '.[]?.databaseId // empty')
+    for rid in $runs; do
+      if [ "$rid" != "$GITHUB_RUN_ID" ]; then
+        mark "takeover: cancelling run $rid"
+        gh run cancel "$rid" >/dev/null 2>&1 || true
+      fi
+    done
+  else
+    mark "takeover: skipping run cancellation (gh unavailable)"
+  fi
+  mark "takeover: done"
+}
+
+powerdown_and_exit() {
+  mark "boot: graceful shutdown requested"
+  if [ -S "$WORK/qemu-monitor.sock" ]; then
+    python3 - "$WORK/qemu-monitor.sock" <<'PY' >/dev/null 2>&1 || true
+import socket, sys
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+try:
+    s.connect(sys.argv[1])
+    s.sendall(b"system_powerdown\n")
+    s.close()
+except OSError:
+    pass
+PY
+  fi
+  for _ in $(seq 1 10); do
+    kill -0 "$qemu_pid" 2>/dev/null || break
+    sleep 1
+  done
+  kill "$qemu_pid" 2>/dev/null || true
+  wait "$qemu_pid" 2>/dev/null || true
+  exit 0
 }
 
 stage_boot() {
@@ -124,23 +181,31 @@ stage_boot() {
     -drive file="$WORK/image.qcow2",if=virtio,format=qcow2 \
     -nic user,model=virtio,hostfwd=tcp::2222-:22 \
     -virtfs local,path="$WORK/share",mount_tag=share,security_model=none \
+    -monitor unix:"$WORK/qemu-monitor.sock",server,nowait \
     -display none -serial file:"$WORK/qemu.log" > "$WORK/qemu.out" 2> "$WORK/qemu.err" &
   qemu_pid=$!
+  trap powerdown_and_exit TERM INT
 
   vm_ready=no
   ok=no
+  takeover_done=no
   deadline=$((SECONDS + 1200))
   while [ $SECONDS -lt $deadline ]; do
-    put_token || { mark "boot: token write failed, retrying"; sleep 10; continue; }
-    if grep -q VM-READY "$WORK/qemu.log" 2>/dev/null; then
+    if ! kill -0 "$qemu_pid" 2>/dev/null; then
+      mark "boot: qemu exited early"
+      break
+    fi
+    if [ "$takeover_done" = no ] && grep -q VM-READY "$WORK/qemu.log" 2>/dev/null; then
       vm_ready=yes
+      takeover_done=yes
+      mark "boot: vm ready, starting takeover"
+      stage_takeover || mark "boot: takeover failed, continuing"
+    fi
+    if [ "$takeover_done" = yes ]; then
+      put_token || { mark "boot: token write failed, retrying"; sleep 10; continue; }
     fi
     if [ -f "$WORK/share/login-ok" ]; then
       ok=yes
-      break
-    fi
-    if ! kill -0 "$qemu_pid" 2>/dev/null; then
-      mark "boot: qemu exited early"
       break
     fi
     sleep 10
